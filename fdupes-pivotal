@@ -1,0 +1,145 @@
+#!perl
+
+unless($ARGV[1]){
+	print "fdupes-pivotal: You need to define a first directory (the pivot) and a second one which will be traversed for duplicates of files from the pivot\n\n";
+	exit;
+}
+
+use File::Find;
+use File::Spec ();
+use File::Basename ();
+use Digest::MD5::File qw( file_md5_hex );
+
+our $VERSION = 0.02;
+our $check_md5 = 1;
+
+my $path_pivot = File::Spec->rel2abs($ARGV[0]);
+my $path_dir = File::Spec->rel2abs($ARGV[1]);
+
+die "fdupes-pivotal: $path_pivot does not exist!" unless -e $path_pivot;
+
+my %sizes;
+my %mtimes;
+my %hashes;
+my $cntPivot;
+if(-f $path_pivot){
+	print "fdupes-pivotal: Using file $path_pivot as pivot:\n";
+
+	my @stat = stat($path_pivot);
+	$sizes{$stat[7]} = $path_pivot;
+
+	$mtimes{$stat[9]} = $path_pivot;
+
+	if($check_md5){
+		my $md5 = file_md5_hex($path_pivot);
+		$hashes{$md5} = $path_pivot;
+	}
+
+	$cntPivot++;
+}else{
+	print "fdupes-pivotal: Building file list from pivot dir: $path_pivot\n";
+	opendir(my $dh, $path_pivot) || die "can't opendir $path_pivot: $!";
+	 my @files = readdir($dh);
+	closedir $dh;
+	for(@files){
+		next unless -f $path_pivot.'/'.$_;
+
+		my @stat = stat($path_pivot.'/'.$_);
+		warn "fdupes-pivotal: This size already exists!!\n" if defined($sizes{$stat[7]});
+		$sizes{$stat[7]} = $path_pivot.'/'.$_;
+
+		warn "fdupes-pivotal: This mtime already exists!!\n" if defined($mtimes{$stat[9]});
+		$mtimes{$stat[9]} = $path_pivot.'/'.$_;
+
+		if($check_md5){
+			my $md5 = file_md5_hex($path_pivot.'/'.$_);
+			warn "fdupes-pivotal: This hash already exists!!\n" if defined($hashes{$md5});
+			$hashes{$md5} = $path_pivot.'/'.$_;
+		}
+
+	#	print "fdupes-pivotal: $path_pivot/$_ size:$stat[7] md5:$md5\n";
+		$cntPivot++;
+	}
+}
+
+my %results;
+
+print "fdupes-pivotal: Traversing dir $path_dir:\n";
+my $cnt=0;
+my $cntMatches=0;
+File::Find::find({ wanted => \&wanted }, $path_dir);
+print "fdupes-pivotal: Done. $cntPivot pivot file(s) ; compared $cnt files ; $cntMatches matches.\n";
+
+
+sub wanted {
+	## only dirs with files qualify
+	return if !-f $File::Find::name;
+
+	$cnt++;
+
+	my @stat = stat($File::Find::dir.'/'.$_);
+
+	next unless defined($sizes{$stat[7]});
+
+	print " ".File::Basename::basename($sizes{$stat[7]})."\n";
+	print " $_ in $File::Find::dir - ";
+	print "same name, " if File::Basename::basename($sizes{$stat[7]}) eq $_;
+	print "same size";
+
+	if( defined($mtimes{$stat[7]}) ){
+		print ", same mtime";
+	}else{
+		print ", diff mtime";
+	}
+
+	if($check_md5){
+		my $md5 = file_md5_hex($File::Find::dir.'/'.$_);
+		next unless defined($hashes{$md5});
+		print ", same md5";
+	}
+
+	$cntMatches++;
+	print "\n";
+}
+
+__END__
+
+=pod
+
+=head1 NAME
+
+fdupes-pivotal - (Perl) fdupes variant, where duplicates are searched from a central (pivotal) directory
+
+=head1 SYNOPSIS
+
+	$ fdupes-pivotal <some directory> <some other directory>
+
+	You need to define a first directory (the pivot) and a second one which will be traversed for
+	duplicates of files from the pivot directory.
+
+=head1 DESCRIPTION
+
+You might know the handy file-deduplication tool L<fdupes|http://en.wikipedia.org/wiki/Fdupes>. Well,
+fdupes looks for duplicates I<within> a directory tree. Now this tool here, fdupes-pivotal, takes files
+located in a defined central (or as we call it: "I<pivotal>") directory and looks for duplicates of these
+files in another directory tree by traversing down that other directory tree, comparing sizes, timestamps
+and MD5 hashes.
+
+=head1 CAVEATS
+
+This is alpha stage software! Be careful when you use it. Look into the source to understand
+what it does and to make sure that it's safe for you to use. And feel free to send patches
+or improvements by forking the public repository.
+
+One current limitation is that it assumes that all sizes and mtimes in the pivot dir are unique.
+
+=head1 AUTHOR
+
+Clipland GmbH L<http://www.clipland.com/>
+
+=head1 COPYRIGHT & LICENSE
+
+Copyright 2013 Clipland GmbH. All rights reserved.
+
+This library is free software, dual-licensed under L<GPLv3|http://www.gnu.org/licenses/gpl>/L<AL2|http://opensource.org/licenses/Artistic-2.0>.
+You can redistribute it and/or modify it under the same terms as Perl itself.

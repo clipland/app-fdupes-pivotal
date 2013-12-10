@@ -1,0 +1,19 @@
+App::fdupes-pivotal
+
+This archive contains the distribution App::fdupes-pivotal.
+Please refer to the embedded POD for documentation,
+version and license information:
+http://search.cpan.org/perldoc?App%3A%3Afdupes-pivotal
+
+
+Installation
+
+untar the archive, then do
+perl Makefile.PL
+make
+make install
+
+
+Author
+
+Clipland GmbH, http://www.clipland.com
